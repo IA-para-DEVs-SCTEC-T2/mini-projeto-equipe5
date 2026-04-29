@@ -26,4 +26,11 @@ public class TaskService {
         tasks.add(newTask);
         return newTask;
     }
+
+    public void delete(Long id) {
+        boolean removed = tasks.removeIf(task -> task.id().equals(id));
+        if (!removed) {
+            throw new TaskNotFoundException(id);
+        }
+    }
 }

@@ -25,4 +25,10 @@ public class TaskController {
     public Task addTask(@RequestBody Task task) {
         return taskService.add(task);
     }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTask(@PathVariable Long id) {
+        taskService.delete(id);
+    }
 }
