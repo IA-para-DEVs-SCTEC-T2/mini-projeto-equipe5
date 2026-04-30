@@ -11,12 +11,12 @@
 - Use estritamente o padrão **Conventional Commits**.
 - O idioma dos commits deve ser o [Inglês / Português].
 - **Tipos permitidos:**
-  - `feat:` (novas funcionalidades)
-  - `fix:` (correção de bugs)
-  - `chore:` (atualização de dependências, setup de ambiente)
-  - `refactor:` (mudanças no código que não alteram comportamento)
-  - `test:` (adição ou correção de testes)
-- **Exemplo válido:** `feat(crm): add lead management board`
+  - `feat:` (novas funcionalidades).
+  - `fix:` (correção de bugs).
+  - `chore:` (atualização de dependências, setup de ambiente).
+  - `refactor:` (mudanças no código que não alteram comportamento).
+  - `test:` (adição ou correção de testes).
+- **Exemplo válido:** `feat(crm): add lead management board`.
 
 ## 3. Workflow da IA
 - Ao iniciar uma nova Spec de funcionalidade, certifique-se de criar e mudar para a branch `feature/` correspondente a partir de `develop` antes de escrever código.
