@@ -1,2 +1,3 @@
-# mini-projeto-equipe5
-texto placeholder
+# Mini-Projeto-Equipe5
+[TEXTO PLACEHOLDER]
+*OBJETIVO* -
