@@ -4,50 +4,54 @@ inclusion: always
 
 # Produto: Gamificação para Controle de Tarefas
 
-Este produto transforma o gerenciamento de tarefas em uma experiência engajante com elementos de RPG retrô. Cada tarefa concluída gera progresso visível para o usuário dentro do sistema.
-
-## Objetivo
-
-Aumentar engajamento, consistência e sensação de conquista ao combinar produtividade com mecânicas de jogo, tornando a rotina mais leve e motivadora.
+Aplicação de gerenciamento de tarefas com mecânicas de RPG retrô. Cada tarefa concluída gera XP, avança o personagem no mapa e desbloqueia conquistas, tornando a produtividade engajante.
 
 ## Pilares de Gamificação
 
-- **Pontos (XP):** acumulados ao concluir tarefas, motivando a produtividade diária.
-- **Níveis:** representam o progresso do usuário e desbloqueiam novos recursos.
-- **Conquistas:** badges e medalhas celebram marcos importantes.
-- **Recompensas:** benefícios tangíveis que incentivam o engajamento contínuo.
+| Pilar | Descrição |
+|---|---|
+| XP | Pontos acumulados ao concluir tarefas |
+| Níveis | Progresso do usuário; desbloqueiam recursos |
+| Conquistas | Badges/medalhas por marcos atingidos |
+| Leaderboard | Ranking entre usuários para competição saudável |
 
-## Personagem RPG Retrô
+## Personagem RPG
 
-- Um personagem representa o usuário e avança no mapa a cada tarefa concluída.
-- O visual remete a jogos de RPG clássicos, trazendo nostalgia e identidade forte ao produto.
-- O progresso diário deve ser visualmente claro e imediato.
+- Cada usuário tem um personagem que avança no mapa conforme tarefas são concluídas.
+- Visual pixel-art / RPG clássico retrô.
+- Progresso deve ser visualmente imediato após cada ação.
 
 ## Funcionalidades Principais
 
-### Tracking de Progresso
-- Visualização em tempo real do status das tarefas.
-- Histórico completo de atividades do usuário.
-- Métricas de produtividade individual e em equipe.
+- Criação, edição e conclusão de tarefas com atribuição automática de XP.
+- Histórico de atividades e métricas de produtividade individual e em equipe.
+- Sistema de conquistas desbloqueáveis e leaderboard global.
+- Visualização do personagem e mapa RPG em tempo real.
 
-### Sistema de Recompensas
-- XP por tarefa concluída.
-- Badges e conquistas desbloqueáveis.
-- Leaderboards para competição saudável entre usuários.
-- Níveis de progressão motivacionais.
-
-## Stack Tecnológica
+## Stack
 
 | Camada | Tecnologia |
-|--------|-----------|
-| Backend | Spring Boot (Java) |
-| Frontend | React (TypeScript) |
-| Game/Animação | Bibliotecas de games em TypeScript (ex: Phaser, PixiJS) |
+|---|---|
+| Backend | Spring Boot 3.x (Java 21) |
+| Frontend | React 18 + TypeScript 5 (Vite) |
+| Game/Animação | Phaser 3 ou PixiJS (TypeScript) |
+| Banco | PostgreSQL (Flyway migrations) |
 
-## Convenções para a IA
+## Regras Críticas para a IA
 
-- O backend expõe APIs REST via Spring Boot; toda lógica de negócio (XP, níveis, conquistas) reside no backend.
-- O frontend React consome essas APIs e renderiza a interface de tarefas e o cenário RPG.
-- A camada de game/animação é responsabilidade exclusiva do frontend em TypeScript.
-- Novos recursos de gamificação devem ser modelados como entidades no backend antes de serem expostos ao frontend.
-- Mantenha separação clara entre lógica de negócio (backend) e lógica de apresentação/animação (frontend).
+### Separação de responsabilidades
+- **Toda lógica de negócio** (cálculo de XP, progressão de nível, desbloqueio de conquistas) reside **exclusivamente no backend**.
+- O frontend apenas consome APIs REST e renderiza dados — nunca calcula XP ou níveis.
+- A camada `game/` é estritamente de apresentação/animação: sem chamadas de API diretas, sem lógica de negócio.
+
+### Ordem de implementação
+- Novos recursos de gamificação: modelar entidades e lógica no backend primeiro, depois expor via API, depois consumir no frontend.
+
+### Endpoints
+- Todos os endpoints sob `/api/v1/...`.
+- Respostas sempre via DTOs (`record` Java) — nunca expor entidades JPA.
+
+### Frontend
+- Tokens de autenticação em `HttpOnly` cookies — nunca em `localStorage`.
+- Tipos TypeScript do frontend alinhados com os DTOs do backend.
+- Cliente Axios centralizado em `shared/services/` com interceptors de auth e erro.

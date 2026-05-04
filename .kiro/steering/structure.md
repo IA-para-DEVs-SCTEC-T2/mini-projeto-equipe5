@@ -2,19 +2,17 @@
 inclusion: always
 ---
 
-# Estrutura do Projeto
+# Project Structure
 
-Este projeto é um monorepo com dois módulos principais: backend (Spring Boot) e frontend (React + TypeScript).
-
-## Visão Geral
+Monorepo with two main modules: `backend/` (Spring Boot, Java 21) and `frontend/` (React + TypeScript + Vite).
 
 ```
 /
-├── backend/                        # Spring Boot (Java 21)
-├── frontend/                       # React + TypeScript + Vite
-├── .kiro/                          # Configurações do Kiro (steering, specs)
-├── .github/                        # CI/CD (GitHub Actions)
-├── docker-compose.yml              # Ambiente local completo
+├── backend/                  # Spring Boot (Java 21)
+├── frontend/                 # React + TypeScript + Vite
+├── .kiro/                    # Kiro config (steering, specs)
+├── .github/                  # CI/CD (GitHub Actions)
+├── docker-compose.yml        # Full local environment
 └── README.md
 ```
 
@@ -22,92 +20,83 @@ Este projeto é um monorepo com dois módulos principais: backend (Spring Boot) 
 
 ## Backend (`/backend`)
 
-Estrutura modular orientada a feature, com pacote raiz `com.company.app`.
+Root package: `com.company.app`. Feature-oriented modular structure.
 
 ```
-backend/
-├── src/
-│   ├── main/
-│   │   ├── java/com/company/app/
-│   │   │   ├── TasksApplication.java       # Entry point
-│   │   │   ├── config/                     # Segurança, OpenAPI, beans globais
-│   │   │   ├── common/                     # Exceções, utils, modelos de resposta
-│   │   │   ├── tasks/                      # Módulo de tarefas
-│   │   │   │   ├── api/                    # Controllers REST
-│   │   │   │   ├── application/            # Services / casos de uso
-│   │   │   │   ├── domain/                 # Entidades, value objects
-│   │   │   │   └── infrastructure/         # Repositórios JPA
-│   │   │   ├── gamification/               # Módulo de gamificação (XP, níveis, conquistas)
-│   │   │   │   ├── api/
-│   │   │   │   ├── application/
-│   │   │   │   ├── domain/
-│   │   │   │   └── infrastructure/
-│   │   │   └── user/                       # Módulo de usuário e autenticação
-│   │   │       ├── api/
-│   │   │       ├── application/
-│   │   │       ├── domain/
-│   │   │       └── infrastructure/
-│   │   └── resources/
-│   │       ├── application.yml             # Configuração base
-│   │       ├── application-local.yml
-│   │       ├── application-dev.yml
-│   │       ├── application-prod.yml
-│   │       └── db/migration/               # Scripts Flyway (V1__*, V2__*, ...)
-│   └── test/
-│       └── java/com/company/app/           # Testes unitários e de integração
-└── pom.xml
+backend/src/main/java/com/company/app/
+├── TasksApplication.java         # Entry point
+├── config/                       # Security, OpenAPI, global beans
+├── common/                       # Exceptions, utils, response models
+├── tasks/                        # Tasks module
+│   ├── api/                      # REST controllers
+│   ├── application/              # Services / use cases
+│   ├── domain/                   # Entities, value objects
+│   └── infrastructure/           # JPA repositories
+├── gamification/                 # XP, levels, achievements module
+│   ├── api/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+└── user/                         # User and auth module
+    ├── api/
+    ├── application/
+    ├── domain/
+    └── infrastructure/
+
+backend/src/main/resources/
+├── application.yml               # Base config
+├── application-local.yml
+├── application-dev.yml
+├── application-prod.yml
+└── db/migration/                 # Flyway scripts: V{n}__{description}.sql
 ```
 
-### Convenções do Backend
+### Backend Conventions
 
-- Controllers ficam em `.api`, nunca expõem entidades diretamente — sempre DTOs.
-- Lógica de negócio (XP, níveis, conquistas) reside exclusivamente em `.application` e `.domain`.
-- Migrations de banco nomeadas como `V{numero}__{descricao}.sql` em `resources/db/migration`.
-- Endpoints versionados em `/api/v1/...`.
+- **Layer responsibilities:** `.api` = controllers only; `.application` = all business logic; `.domain` = entities/value objects; `.infrastructure` = JPA repositories.
+- **DTOs:** Always use Java `record` types for DTOs. Never expose JPA entities in API responses.
+- **Endpoints:** All routes versioned under `/api/v1/...`.
+- **Migrations:** Named `V{n}__{description}.sql` in `resources/db/migration/`. Never modify an already-applied migration — always create a new one.
+- **New gamification features:** Model and implement in backend first, then expose to frontend.
 
 ---
 
 ## Frontend (`/frontend`)
 
-Estrutura baseada em features, com separação clara entre lógica de negócio, UI e camada de game.
+Feature-based structure with strict separation between UI, business display, and game layer.
 
 ```
-frontend/
-├── src/
-│   ├── app/                        # Bootstrap, providers, roteamento global
-│   ├── features/
-│   │   ├── tasks/                  # CRUD de tarefas
-│   │   ├── gamification/           # Leaderboard, conquistas, XP display
-│   │   └── auth/                   # Login, registro, guards de rota
-│   ├── game/                       # Camada de game/animação (Phaser ou PixiJS)
-│   │   ├── scenes/                 # Cenas do RPG (mapa, personagem)
-│   │   └── assets/                 # Sprites, tilesets, sons
-│   ├── shared/
-│   │   ├── components/             # Componentes UI reutilizáveis
-│   │   ├── hooks/                  # Hooks reutilizáveis
-│   │   ├── services/               # Clientes de API (Axios)
-│   │   ├── types/                  # Tipos e contratos TypeScript
-│   │   └── utils/                  # Helpers puros
-│   └── main.tsx                    # Entry point
-├── public/
-├── index.html
-├── vite.config.ts
-├── tsconfig.json
-└── package.json
+frontend/src/
+├── app/                      # Bootstrap, providers, global routing
+├── features/
+│   ├── tasks/                # Task CRUD (components, hooks, types)
+│   ├── gamification/         # Leaderboard, achievements, XP display
+│   └── auth/                 # Login, registration, route guards
+├── game/                     # Game/animation layer (Phaser or PixiJS)
+│   ├── scenes/               # RPG scenes (map, character)
+│   └── assets/               # Sprites, tilesets, sounds
+├── shared/
+│   ├── components/           # Reusable UI components (cross-feature)
+│   ├── hooks/                # Reusable hooks
+│   ├── services/             # Axios API clients (typed with backend DTOs)
+│   ├── types/                # Shared TypeScript types and contracts
+│   └── utils/                # Pure helper functions
+└── main.tsx                  # Entry point
 ```
 
-### Convenções do Frontend
+### Frontend Conventions
 
-- A pasta `game/` é exclusiva para renderização e animação — sem chamadas de API ou lógica de negócio.
-- Cada feature em `features/` é autossuficiente: componentes, hooks e tipos próprios.
-- Serviços de API ficam em `shared/services/`, tipados com os DTOs do backend.
-- Componentes reutilizáveis entre features ficam em `shared/components/`.
+- **`game/`** is strictly for rendering and animation — no API calls, no business logic.
+- **`features/`** each feature is self-contained: its own components, hooks, and types.
+- **`shared/services/`** holds all Axios clients, typed to match backend DTOs.
+- **`shared/components/`** for components reused across multiple features.
+- Business logic (XP calculation, level-ups, achievements) lives exclusively in the backend.
 
 ---
 
-## Regras Gerais
+## General Rules
 
-- Nunca colocar lógica de negócio no frontend — apenas no backend.
-- Nunca expor entidades JPA diretamente nas respostas da API — usar DTOs.
-- Variáveis de ambiente nunca hardcoded — usar `.env` (local) e variáveis de CI/CD (produção).
-- Novos módulos de gamificação devem ser criados no backend antes de serem consumidos pelo frontend.
+- Business logic belongs in the backend only — never in the frontend.
+- JPA entities must never be returned directly from API endpoints — always map to DTOs.
+- No hardcoded environment variables — use `.env` locally and CI/CD secrets in production.
+- New gamification modules must be built in the backend before being consumed by the frontend.
