@@ -2,52 +2,56 @@
 inclusion: always
 ---
 
-# Produto: Gamificação para Controle de Tarefas
+# Produto: QuestBoard — Gamificação para Controle de Tarefas
 
-Este produto transforma o gerenciamento de tarefas em uma experiência engajante com elementos de RPG retrô. Cada tarefa concluída gera progresso visível para o usuário dentro do sistema.
+O QuestBoard transforma o gerenciamento de tarefas em uma experiência de RPG retrô. Cada tarefa concluída gera progresso visível: XP, níveis, conquistas e avanço do personagem no mapa.
 
 ## Objetivo
 
-Aumentar engajamento, consistência e sensação de conquista ao combinar produtividade com mecânicas de jogo, tornando a rotina mais leve e motivadora.
+Aumentar engajamento e consistência ao combinar produtividade com mecânicas de jogo, tornando a rotina mais leve e motivadora.
 
 ## Pilares de Gamificação
 
-- **Pontos (XP):** acumulados ao concluir tarefas, motivando a produtividade diária.
-- **Níveis:** representam o progresso do usuário e desbloqueiam novos recursos.
-- **Conquistas:** badges e medalhas celebram marcos importantes.
-- **Recompensas:** benefícios tangíveis que incentivam o engajamento contínuo.
+| Pilar | Descrição |
+|-------|-----------|
+| **XP (Pontos)** | Acumulados ao concluir tarefas; motivam a produtividade diária |
+| **Níveis** | Representam o progresso do usuário e desbloqueiam novos recursos |
+| **Conquistas** | Badges e medalhas que celebram marcos importantes |
+| **Leaderboard** | Ranking entre usuários para competição saudável |
 
 ## Personagem RPG Retrô
 
-- Um personagem representa o usuário e avança no mapa a cada tarefa concluída.
-- O visual remete a jogos de RPG clássicos, trazendo nostalgia e identidade forte ao produto.
-- O progresso diário deve ser visualmente claro e imediato.
+- Cada usuário possui um personagem que avança no mapa a cada tarefa concluída.
+- O visual remete a jogos de RPG clássicos (pixel art).
+- O progresso deve ser visualmente imediato — o usuário precisa sentir o avanço.
 
 ## Funcionalidades Principais
+
+### Gestão de Tarefas
+- Criação, edição e conclusão de tarefas com suporte a prazos e prioridades.
+- Quadros estilo Kanban dentro do ambiente interativo.
+- Metas diárias e mensais com acompanhamento visual.
 
 ### Tracking de Progresso
 - Visualização em tempo real do status das tarefas.
 - Histórico completo de atividades do usuário.
-- Métricas de produtividade individual e em equipe.
+- Dashboard com métricas de produtividade individual e em equipe.
 
 ### Sistema de Recompensas
-- XP por tarefa concluída.
-- Badges e conquistas desbloqueáveis.
-- Leaderboards para competição saudável entre usuários.
-- Níveis de progressão motivacionais.
+- XP por tarefa concluída (regras de cálculo residem no backend).
+- Badges e conquistas desbloqueáveis por marcos.
+- Leaderboard global e por equipe.
+- Níveis de progressão com desbloqueio de recursos.
 
-## Stack Tecnológica
+### Ambiente Interativo
+- Mundo 2D em pixel art navegável com avatar personalizado.
+- Espaços colaborativos (salas compartilhadas por equipe).
+- Personalização de avatar e tema visual.
 
-| Camada | Tecnologia |
-|--------|-----------|
-| Backend | Spring Boot (Java) |
-| Frontend | React (TypeScript) |
-| Game/Animação | Bibliotecas de games em TypeScript (ex: Phaser, PixiJS) |
+## Regras de Negócio Críticas para a IA
 
-## Convenções para a IA
-
-- O backend expõe APIs REST via Spring Boot; toda lógica de negócio (XP, níveis, conquistas) reside no backend.
-- O frontend React consome essas APIs e renderiza a interface de tarefas e o cenário RPG.
-- A camada de game/animação é responsabilidade exclusiva do frontend em TypeScript.
-- Novos recursos de gamificação devem ser modelados como entidades no backend antes de serem expostos ao frontend.
-- Mantenha separação clara entre lógica de negócio (backend) e lógica de apresentação/animação (frontend).
+- Toda lógica de XP, níveis e conquistas **reside exclusivamente no backend** (Spring Boot).
+- O frontend **nunca calcula XP** — apenas exibe o que a API retorna.
+- Novos recursos de gamificação devem ser modelados como entidades no backend antes de qualquer implementação no frontend.
+- A camada de animação/game (Phaser/PixiJS) é responsabilidade exclusiva do frontend TypeScript.
+- Mantenha separação rígida: lógica de negócio no backend, apresentação/animação no frontend.
