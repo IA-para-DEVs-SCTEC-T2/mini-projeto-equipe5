@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { Player } from '../entities/Player'
 import type { WASDKeys } from '../entities/Player'
+import { Interactable } from '../entities/Interactable'
 import { CameraSystem } from '../systems/CameraSystem'
 import { GameEventBus, GAME_EVENTS } from '../GameEventBus'
 
@@ -9,9 +10,12 @@ const WORLD_HEIGHT = 3200
 
 export class WorldScene extends Phaser.Scene {
   private player!: Player
+  private interactable!: Interactable
   private cameraSystem!: CameraSystem
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private wasd!: WASDKeys
+  private interactKey!: Phaser.Input.Keyboard.Key
+  private movementSuspended = false
 
   constructor() {
     super({ key: 'WorldScene' })
@@ -37,6 +41,9 @@ export class WorldScene extends Phaser.Scene {
     // Physics world bounds
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
 
+    // Interactable object — placed near world center
+    this.interactable = new Interactable(this, WORLD_WIDTH / 2 + 150, WORLD_HEIGHT / 2)
+
     // Player at world center
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2)
 
@@ -51,9 +58,18 @@ export class WorldScene extends Phaser.Scene {
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
 
+    // Interaction key (E or Space)
+    this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E)
+    // Also support Space via cursors.space
+    this.cursors.space = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+
     // Camera
     this.cameraSystem = new CameraSystem(this, WORLD_WIDTH, WORLD_HEIGHT)
     this.cameraSystem.follow(this.player)
+
+    // Modal open/close listeners
+    GameEventBus.on(GAME_EVENTS.OPEN_TASK_MODAL, this.onModalOpen, this)
+    GameEventBus.on(GAME_EVENTS.CLOSE_TASK_MODAL, this.onModalClose, this)
 
     // Stub event listeners for future features
     GameEventBus.on(GAME_EVENTS.TASK_COMPLETED, this.onTaskCompleted, this)
@@ -61,7 +77,31 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(): void {
-    this.player.handleMovement(this.cursors, this.wasd)
+    if (!this.movementSuspended) {
+      this.player.handleMovement(this.cursors, this.wasd)
+    } else {
+      this.player.setVelocity(0, 0)
+    }
+
+    const interactPressed =
+      Phaser.Input.Keyboard.JustDown(this.interactKey) ||
+      Phaser.Input.Keyboard.JustDown(this.cursors.space as Phaser.Input.Keyboard.Key)
+
+    this.interactable.updateProximity(
+      this.player.x,
+      this.player.y,
+      interactPressed && !this.movementSuspended
+    )
+  }
+
+  private onModalOpen(): void {
+    this.movementSuspended = true
+    this.player.setVelocity(0, 0)
+  }
+
+  private onModalClose(): void {
+    this.movementSuspended = false
+    this.player.setVelocity(0, 0)
   }
 
   private onTaskCompleted(_payload: unknown): void {

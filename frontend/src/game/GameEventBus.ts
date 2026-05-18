@@ -8,4 +8,6 @@ export const GAME_EVENTS = {
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
   PLAYER_DATA_LOADED: 'player:data_loaded',
   LEADERBOARD_UPDATED: 'leaderboard:updated',
+  OPEN_TASK_MODAL: 'ui:open_task_modal',
+  CLOSE_TASK_MODAL: 'ui:close_task_modal',
 } as const
