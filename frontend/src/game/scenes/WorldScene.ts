@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { Player, WASDKeys } from '../entities/Player'
+import { Player } from '../entities/Player'
+import type { WASDKeys } from '../entities/Player'
 import { CameraSystem } from '../systems/CameraSystem'
 import { GameEventBus, GAME_EVENTS } from '../GameEventBus'
 
