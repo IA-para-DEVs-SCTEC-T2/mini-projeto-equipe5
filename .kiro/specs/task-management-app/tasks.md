@@ -1,0 +1,242 @@
+# Implementation Plan: Task Management App
+
+## Overview
+
+Full-stack implementation using Java 21 + Spring Boot 3 (backend) and React 18 + TypeScript + Vite (frontend), orchestrated with Docker Compose. Tasks follow the clean architecture layering: infrastructure → domain → repository → exceptions → security → DTOs → services → controllers → frontend.
+
+## Tasks
+
+- [ ] 1. Docker Compose and Dockerfiles
+  - Create `docker-compose.yml` at workspace root with services: `db` (postgres:15-alpine), `backend` (port 8080), `frontend` (port 80)
+  - Add healthcheck on `db` and `depends_on` conditions for `backend` and `frontend`
+  - Create `backend/Dockerfile` using multi-stage build: `maven:3.9-eclipse-temurin-21` build stage, `eclipse-temurin:21-jre-alpine` runtime stage
+  - Create `frontend/Dockerfile` using multi-stage build: `node:20-alpine` build stage, `nginx:alpine` runtime stage
+  - Create `frontend/nginx.conf` with `/api/` proxy to `http://backend:8080` and SPA fallback `try_files $uri $uri/ /index.html`
+  - _Requirements: 10.1_
+
+- [ ] 2. Backend Maven project setup
+  - [ ] 2.1 Create `backend/pom.xml` with Java 21, Spring Boot 3 parent, and dependencies: `spring-boot-starter-web`, `spring-boot-starter-security`, `spring-boot-starter-data-jpa`, `spring-boot-starter-validation`, `postgresql`, `flyway-core`, `jjwt-api`, `jjwt-impl`, `jjwt-jackson`, `springdoc-openapi-starter-webmvc-ui`, `jqwik` (test), `spring-boot-starter-test` (test)
+    - Use exact versions: Spring Boot 3.2.x, jjwt 0.12.x, jqwik 1.8.x
+    - _Requirements: 10.1_
+  - [ ] 2.2 Create `backend/src/main/java/com/example/taskmanager/TaskManagerApplication.java` with `@SpringBootApplication` main class
+  - [ ] 2.3 Create `backend/src/main/resources/application.yml` with datasource (env vars `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`), JPA ddl-auto=validate, Flyway enabled, JWT secret from env var `JWT_SECRET`
+  - [ ] 2.4 Create Flyway migration `backend/src/main/resources/db/migration/V1__init.sql`
+    - Tables: `users`, `clients`, `client_pos`, `projects`, `project_clients`, `project_supervisors`, `epics`, `epic_projects`, `tasks`, `task_epics`, `work_logs`, `work_log_tasks`
+    - All PKs as `bigserial`, FKs with `ON DELETE RESTRICT`, unique constraint on `users.email`
+    - `created_at` / `updated_at` as `timestamp` columns on all main tables
+    - _Requirements: 10.1, 10.4_
+
+- [ ] 3. Backend domain entities (JPA)
+  - [ ] 3.1 Create `domain/enums/Role.java` enum with values `REGULAR_USER`, `SUPERVISOR`, `PO`
+  - [ ] 3.2 Create `domain/entity/User.java` — fields: `id`, `email` (unique), `name`, `passwordHash`, `role` (`@Enumerated(STRING)`), `createdAt`, `updatedAt`; add `@PrePersist`/`@PreUpdate` lifecycle hooks
+  - [ ] 3.3 Create `domain/entity/Client.java` — fields: `id`, `name`, `createdAt`, `updatedAt`; `@ManyToMany` `pos` via join table `client_pos`
+  - [ ] 3.4 Create `domain/entity/Project.java` — fields: `id`, `name`, `startDate` (`LocalDate`), `endDate` (`LocalDate`), `createdAt`, `updatedAt`; `@ManyToMany` `clients` via `project_clients`, `@ManyToMany` `supervisors` via `project_supervisors`
+  - [ ] 3.5 Create `domain/entity/Epic.java` — fields: `id`, `title`, `description`, `startDate`, `endDate`, `createdAt`, `updatedAt`; `@ManyToMany` `projects` via `epic_projects`
+  - [ ] 3.6 Create `domain/entity/Task.java` — fields: `id`, `title`, `description`, `datetimeStart` (`LocalDateTime`), `datetimeEnd` (`LocalDateTime`), `createdAt`, `updatedAt`; `@ManyToMany` `epics` via `task_epics`
+  - [ ] 3.7 Create `domain/entity/WorkLog.java` — fields: `id`, `description`, `datetimeStart`, `datetimeEnd`, `createdAt`, `updatedAt`; `@ManyToMany` `tasks` via `work_log_tasks`
+  - _Requirements: 4.2, 5.2, 6.2, 7.2, 8.2_
+
+- [ ] 4. Backend repositories (Spring Data JPA)
+  - Create one `JpaRepository` interface per entity in `repository/` package:
+    - `UserRepository` — add `Optional<User> findByEmail(String email)`
+    - `ClientRepository`
+    - `ProjectRepository`
+    - `EpicRepository` — add `List<Epic> findByProjects_Id(Long projectId)`
+    - `TaskRepository` — add `List<Task> findByEpics_Id(Long epicId)`
+    - `WorkLogRepository` — add `List<WorkLog> findByTasks_Id(Long taskId)`
+  - _Requirements: 9.2, 9.3, 9.4_
+
+- [ ] 5. Backend exceptions and GlobalExceptionHandler
+  - [ ] 5.1 Create `exception/AppException.java` base class extending `RuntimeException` with `status` (int) and `code` (String) fields
+  - [ ] 5.2 Create concrete exceptions: `NotFoundException` (404), `ConflictException` (409), `ForbiddenException` (403), `UnauthorizedException` (401), `ValidationException` (422, with `List<FieldError>`)
+  - [ ] 5.3 Create `exception/GlobalExceptionHandler.java` annotated `@RestControllerAdvice`
+    - Handle `AppException` → status from exception, body `ErrorResponse`
+    - Handle `MethodArgumentNotValidException` → 422 with field-level details
+    - Handle `DataIntegrityViolationException` → 409 CONFLICT
+    - _Requirements: 10.3, 10.4_
+  - [ ] 5.4 Create `dto/response/ErrorResponse.java` as a Java record with nested `FieldError` record
+    - _Requirements: 10.3_
+
+- [ ] 6. Backend security (JWT + Spring Security)
+  - [ ] 6.1 Create `security/JwtService.java`
+    - `generateToken(User user)` — HS256, subject = user id, claim `role`, expiry 24 h (86400000 ms), key from `JWT_SECRET` env var via `@Value`
+    - `parseToken(String token)` — returns `Claims`, throws `JwtException` on invalid/expired
+    - _Requirements: 2.1_
+  - [ ] 6.2 Create `security/UserDetailsServiceImpl.java` implementing `UserDetailsService`, loading user by email from `UserRepository`
+  - [ ] 6.3 Create `security/JwtAuthenticationFilter.java` extending `OncePerRequestFilter`
+    - Extract `Bearer` token from `Authorization` header
+    - Call `jwtService.parseToken()`, build `UsernamePasswordAuthenticationToken` with `ROLE_<role>` authority, set in `SecurityContextHolder`
+    - On `JwtException` leave context empty (Spring Security returns 401)
+    - _Requirements: 2.4, 2.5_
+  - [ ] 6.4 Create `config/SecurityConfig.java`
+    - Disable CSRF, stateless session, permit `/api/auth/**`, authenticate all other requests
+    - Register `JwtAuthenticationFilter` before `UsernamePasswordAuthenticationFilter`
+    - Expose `PasswordEncoder` bean (BCrypt)
+    - _Requirements: 2.4_
+  - [ ] 6.5 Create `config/OpenApiConfig.java` with `@OpenAPIDefinition` and Bearer security scheme for Swagger UI
+    - _Requirements: 10.5_
+
+- [ ] 7. Backend DTOs (request and response records)
+  - [ ] 7.1 Create request records in `dto/request/`:
+    - `RegisterRequest(String email, String name, String password)` — `@NotBlank` on all fields, `@Email` on email
+    - `LoginRequest(String email, String password)` — `@NotBlank` on both
+    - `CreateClientRequest(String name, List<Long> poUserIds)` — `@NotBlank` name
+    - `UpdateClientRequest(String name, List<Long> poUserIds)`
+    - `CreateProjectRequest(String name, LocalDate startDate, LocalDate endDate, List<Long> clientIds, List<Long> supervisorUserIds)` — `@NotBlank` name, `@NotEmpty` clientIds
+    - `UpdateProjectRequest(String name, LocalDate startDate, LocalDate endDate, List<Long> clientIds, List<Long> supervisorUserIds)`
+    - `CreateEpicRequest(String title, String description, LocalDate startDate, LocalDate endDate, List<Long> projectIds)` — `@NotBlank` title, `@NotEmpty` projectIds
+    - `UpdateEpicRequest(String title, String description, LocalDate startDate, LocalDate endDate, List<Long> projectIds)`
+    - `CreateTaskRequest(String title, String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<Long> epicIds)` — `@NotBlank` title, `@NotEmpty` epicIds
+    - `UpdateTaskRequest(String title, String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<Long> epicIds)`
+    - `CreateWorkLogRequest(String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<Long> taskIds)` — `@NotEmpty` taskIds
+    - `UpdateWorkLogRequest(String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<Long> taskIds)`
+    - _Requirements: 1.1, 4.1, 5.1, 6.1, 7.1, 8.1, 10.3_
+  - [ ] 7.2 Create response records in `dto/response/`:
+    - `UserResponse(Long id, String email, String name, String role)`
+    - `LoginResponse(String token, long expiresIn)`
+    - `ClientResponse(Long id, String name, List<UserResponse> pos)`
+    - `ProjectResponse(Long id, String name, LocalDate startDate, LocalDate endDate, List<ClientResponse> clients, List<UserResponse> supervisors)`
+    - `EpicResponse(Long id, String title, String description, LocalDate startDate, LocalDate endDate, List<ProjectResponse> projects)`
+    - `TaskResponse(Long id, String title, String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<EpicResponse> epics)`
+    - `WorkLogResponse(Long id, String description, LocalDateTime datetimeStart, LocalDateTime datetimeEnd, List<TaskResponse> tasks)`
+    - _Requirements: 9.1, 10.2_
+
+- [ ] 8. Backend services
+  - [ ] 8.1 Implement `AuthService` (interface + `AuthServiceImpl`)
+    - `register`: check email uniqueness (→ 409), validate password length ≥ 8 (→ 422), BCrypt hash, save with `REGULAR_USER` role, return `UserResponse`
+    - `login`: find by email (→ 401 if absent), `passwordEncoder.matches` (→ 401 if false), generate JWT, return `LoginResponse`
+    - _Requirements: 1.1–1.5, 2.1–2.3_
+  - [ ]* 8.2 Write property tests for AuthService
+    - **Property 1: Valid registration always creates a REGULAR_USER** — `@ForAll @Email String email`, `@ForAll @StringLength(min=8) String password`
+    - **Property 2: Short passwords are always rejected** — `@ForAll @IntRange(min=0, max=7) int length`
+    - **Property 3: Passwords are never stored as plaintext** — verify `passwordHash != plaintext` and `BCryptPasswordEncoder.matches` returns true
+    - **Property 4: Valid login returns a JWT with expiry ≤ 24 hours** — verify `exp − iat ≤ 86400`
+    - **Property 5: Invalid credentials always return 401** — wrong email or wrong password throws `UnauthorizedException`
+    - **Validates: Requirements 1.2, 1.4, 1.5, 2.1, 2.2, 2.3**
+  - [ ] 8.3 Implement `ClientService` (interface + `ClientServiceImpl`)
+    - `create`: require SUPERVISOR role (→ 403), resolve `poUserIds` (→ 422 if any missing), save, return `ClientResponse`
+    - `update`: require SUPERVISOR, resolve POs, replace set, save
+    - `delete`: require SUPERVISOR; let `DataIntegrityViolationException` propagate (→ 409 via handler)
+    - `findById`: → 404 if absent; `findAll`: return all
+    - _Requirements: 4.1–4.5_
+  - [ ]* 8.4 Write property tests for ClientService
+    - **Property 7: Non-supervisor users are always denied** — `@ForAll` role in `{REGULAR_USER, PO}` throws `ForbiddenException`
+    - **Property 9: Entity creation round trip** — created client retrievable with matching name
+    - **Property 11: Non-existent reference always returns 422** — random non-existent `poUserIds` throws `ValidationException`
+    - **Validates: Requirements 3.6, 4.2, 4.4**
+  - [ ] 8.5 Implement `ProjectService` (interface + `ProjectServiceImpl`)
+    - `create`: require SUPERVISOR, validate `endDate` not before `startDate` (→ 422), resolve `clientIds` and `supervisorUserIds` (→ 422 if any missing), save
+    - `update`: same validations, replace both sets
+    - `delete`: require SUPERVISOR; propagate `DataIntegrityViolationException`
+    - `findById`: → 404 if absent; `findAll`: any authenticated user
+    - _Requirements: 5.1–5.7_
+  - [ ]* 8.6 Write property tests for ProjectService
+    - **Property 10: Date inversion always returns 422** — `@ForAll LocalDate start`, `@ForAll LocalDate end` where `end.isBefore(start)` throws `ValidationException`
+    - **Property 16: Association list replacement is exact** — after update, retrieved supervisors/clients match exactly the submitted IDs
+    - **Validates: Requirements 5.4, 5.6**
+  - [ ] 8.7 Implement `EpicService` (interface + `EpicServiceImpl`)
+    - `create`: require SUPERVISOR, validate date range, resolve `projectIds` (→ 422), save
+    - `update`: same validations, replace project set
+    - `delete`: require SUPERVISOR; propagate integrity violation
+    - `findById`: → 404; `findByProjectId`: delegate to `EpicRepository.findByProjects_Id`
+    - _Requirements: 6.1–6.6_
+  - [ ]* 8.8 Write property tests for EpicService
+    - **Property 10: Date inversion always returns 422** — epic date inversion throws `ValidationException`
+    - **Property 11: Non-existent reference always returns 422** — non-existent `projectIds` throws `ValidationException`
+    - **Validates: Requirements 6.4, 6.5**
+  - [ ] 8.9 Implement `TaskService` (interface + `TaskServiceImpl`)
+    - `create`: any authenticated user, validate `datetimeEnd` not before `datetimeStart` (→ 422), resolve `epicIds` (→ 422), save
+    - `update`: same validations, replace epic set
+    - `delete`: any authenticated user; propagate integrity violation
+    - `findById`: → 404; `findByEpicId`: delegate to `TaskRepository.findByEpics_Id`
+    - _Requirements: 7.1–7.6_
+  - [ ]* 8.10 Write property tests for TaskService
+    - **Property 10: Date inversion always returns 422** — task datetime inversion throws `ValidationException`
+    - **Property 9: Entity creation round trip** — created task retrievable with matching title
+    - **Validates: Requirements 7.4, 7.2**
+  - [ ] 8.11 Implement `WorkLogService` (interface + `WorkLogServiceImpl`)
+    - `create`: any authenticated user, validate datetime range, resolve `taskIds` (→ 422), save
+    - `update`: same validations, replace task set
+    - `delete`: any authenticated user; propagate integrity violation
+    - `findById`: → 404; `findByTaskId`: delegate to `WorkLogRepository.findByTasks_Id`
+    - _Requirements: 8.1–8.6_
+  - [ ]* 8.12 Write property tests for WorkLogService
+    - **Property 10: Date inversion always returns 422** — worklog datetime inversion throws `ValidationException`
+    - **Property 11: Non-existent reference always returns 422** — non-existent `taskIds` throws `ValidationException`
+    - **Validates: Requirements 8.4, 8.5**
+
+- [ ] 9. Backend controllers
+  - [ ] 9.1 Create `AuthController` — `POST /api/auth/register` (201), `POST /api/auth/login` (200); both use `@Valid @RequestBody`
+    - _Requirements: 1.1, 2.1_
+  - [ ] 9.2 Create `ClientController` — full CRUD at `/api/clients` and `/api/clients/{id}`; inject `Authentication` and pass to service for role checks
+    - _Requirements: 4.1–4.5_
+  - [ ] 9.3 Create `ProjectController` — full CRUD at `/api/projects` and `/api/projects/{id}`
+    - _Requirements: 5.1–5.7_
+  - [ ] 9.4 Create `EpicController` — full CRUD at `/api/epics` and `/api/epics/{id}`; list endpoint at `GET /api/projects/{projectId}/epics`
+    - _Requirements: 6.1–6.6, 9.2_
+  - [ ] 9.5 Create `TaskController` — full CRUD at `/api/tasks` and `/api/tasks/{id}`; list endpoint at `GET /api/epics/{epicId}/tasks`
+    - _Requirements: 7.1–7.6, 9.3_
+  - [ ] 9.6 Create `WorkLogController` — full CRUD at `/api/worklogs` and `/api/worklogs/{id}`; list endpoint at `GET /api/tasks/{taskId}/worklogs`
+    - _Requirements: 8.1–8.6, 9.4_
+  - [ ]* 9.7 Write unit tests for GlobalExceptionHandler
+    - Verify each exception type maps to the correct HTTP status and error code
+    - Verify `MethodArgumentNotValidException` produces field-level `error.fields` array
+    - **Property 13: All API responses carry Content-Type application/json**
+    - **Property 14: Validation errors always include field-level details**
+    - **Validates: Requirements 10.2, 10.3**
+
+- [ ] 10. Backend checkpoint — ensure all tests pass
+  - Run `mvn test` in `backend/`; ensure all unit and property tests pass. Ask the user if questions arise.
+
+- [ ] 11. Frontend project setup
+  - [ ] 11.1 Create `frontend/package.json` with dependencies: `react@18`, `react-dom@18`, `react-router-dom@6`, `@tanstack/react-query@5`, `axios`; devDependencies: `typescript`, `vite`, `@vitejs/plugin-react`, `@types/react`, `@types/react-dom`
+    - Use exact versions
+  - [ ] 11.2 Create `frontend/vite.config.ts` — React plugin, server proxy `/api` → `http://localhost:8080`
+  - [ ] 11.3 Create `frontend/tsconfig.json` — strict mode, `jsx: react-jsx`, `moduleResolution: bundler`
+  - [ ] 11.4 Create `frontend/src/main.tsx` — render `<App />` wrapped in `QueryClientProvider` and `BrowserRouter`
+  - [ ] 11.5 Create `frontend/src/App.tsx` — define routes: `/login`, `/register`, and protected routes for `/clients`, `/projects`, `/epics`, `/tasks`, `/worklogs`
+  - _Requirements: 10.1_
+
+- [ ] 12. Frontend auth (AuthContext, apiClient, hooks)
+  - [ ] 12.1 Create `frontend/src/api/client.ts` — Axios instance with `baseURL: /api`; request interceptor attaches `Authorization: Bearer <token>` from `localStorage`; response interceptor redirects to `/login` on 401
+    - _Requirements: 2.4_
+  - [ ] 12.2 Create `frontend/src/context/AuthContext.tsx` — store JWT and user info in `localStorage`; expose `login(token)`, `logout()`, `isAuthenticated`, `user` (decoded from JWT)
+    - _Requirements: 2.1_
+  - [ ] 12.3 Create `frontend/src/hooks/useAuth.ts` — mutations for `register` and `login` using `apiClient`, storing token via `AuthContext`
+    - _Requirements: 1.1, 2.1_
+  - [ ] 12.4 Create `frontend/src/components/ProtectedRoute.tsx` — redirect to `/login` if `!isAuthenticated`
+    - _Requirements: 2.4_
+  - [ ] 12.5 Create TanStack Query hooks in `frontend/src/hooks/`:
+    - `useClients.ts` — `useQuery` for list/get, `useMutation` for create/update/delete
+    - `useProjects.ts` — same pattern
+    - `useEpics.ts` — list by `projectId`, get by id, create/update/delete
+    - `useTasks.ts` — list by `epicId`, get by id, create/update/delete
+    - `useWorkLogs.ts` — list by `taskId`, get by id, create/update/delete
+    - _Requirements: 4.1–4.5, 5.1–5.7, 6.1–6.6, 7.1–7.6, 8.1–8.6_
+
+- [ ] 13. Frontend pages and components
+  - [ ] 13.1 Create `frontend/src/pages/LoginPage.tsx` — form with email + password fields, calls `useAuth` login mutation, redirects to `/projects` on success, shows error on 401
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [ ] 13.2 Create `frontend/src/pages/RegisterPage.tsx` — form with email, name, password fields, calls `useAuth` register mutation, shows 409/422 field errors
+    - _Requirements: 1.1–1.4_
+  - [ ] 13.3 Create `frontend/src/pages/ClientsPage.tsx` — list clients, create/edit/delete form (supervisor only); uses `useClients` hook
+    - _Requirements: 4.1–4.5_
+  - [ ] 13.4 Create `frontend/src/pages/ProjectsPage.tsx` — list projects, create/edit/delete form (supervisor only); uses `useProjects` hook
+    - _Requirements: 5.1–5.7_
+  - [ ] 13.5 Create `frontend/src/pages/EpicsPage.tsx` — list epics filtered by selected project, create/edit/delete (supervisor only); uses `useEpics` hook
+    - _Requirements: 6.1–6.6_
+  - [ ] 13.6 Create `frontend/src/pages/TasksPage.tsx` — list tasks filtered by selected epic, create/edit/delete; uses `useTasks` hook
+    - _Requirements: 7.1–7.6_
+  - [ ] 13.7 Create `frontend/src/pages/WorkLogsPage.tsx` — list worklogs filtered by selected task, create/edit/delete; uses `useWorkLogs` hook
+    - _Requirements: 8.1–8.6_
+
+- [ ] 14. Final checkpoint — ensure all tests pass
+  - Run `mvn test` in `backend/`; verify all unit and property tests pass. Ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for a faster MVP
+- Each task references specific requirements for traceability
+- Property tests use jqwik `@Property` / `@ForAll` annotations with a comment tag `// Feature: task-management-app, Property N: <text>`
+- Checkpoints ensure incremental validation before moving to the next layer
+- The `Authentication` object is injected into controller methods and passed to services for role enforcement
