@@ -10,10 +10,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-import java.util.Collection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,8 +33,9 @@ class ClientServiceImplTest {
     @Test
     void create_throwsForbiddenException_whenUserIsNotSupervisor() {
         Authentication auth = mock(Authentication.class);
-        when(auth.getAuthorities())
-            .thenReturn(List.of(new SimpleGrantedAuthority("ROLE_REGULAR_USER")));
+        when(auth.getAuthorities()).thenAnswer(
+            ignored -> List.of(new SimpleGrantedAuthority("ROLE_REGULAR_USER"))
+        );
 
         CreateClientRequest request = new CreateClientRequest("Acme Corp", List.of());
 
