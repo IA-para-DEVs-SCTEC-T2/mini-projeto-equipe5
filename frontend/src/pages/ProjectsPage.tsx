@@ -1,189 +1,144 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { useAuthContext } from '../context/AuthContext'
-import NavBar from '../components/NavBar'
+import { Link } from 'react-router-dom'
 
-interface Project {
+interface ProjectResponse {
   id: number
   name: string
   startDate: string
   endDate: string
   clients: { id: number; name: string }[]
-  supervisors: { id: string; username?: string }[]
+  supervisors: { id: number; name: string }[]
 }
-
-interface ProjectForm {
-  name: string
-  startDate: string
-  endDate: string
-  clientIds: string
-  supervisorUserIds: string
-}
-
-const emptyForm: ProjectForm = { name: '', startDate: '', endDate: '', clientIds: '', supervisorUserIds: '' }
 
 export default function ProjectsPage() {
-  const { user } = useAuthContext()
   const queryClient = useQueryClient()
+  const { user, logout } = useAuthContext()
   const isSupervisor = user?.role === 'SUPERVISOR'
 
   const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [form, setForm] = useState<ProjectForm>(emptyForm)
+  const [editId, setEditId] = useState<number | null>(null)
+  const [name, setName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [error, setError] = useState('')
 
-  const { data: projects, isLoading } = useQuery<Project[]>({
+  const { data: projects = [], isLoading } = useQuery<ProjectResponse[]>({
     queryKey: ['projects'],
     queryFn: () => apiClient.get('/projects').then(r => r.data),
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: ProjectForm) =>
-      apiClient.post('/projects', {
-        name: data.name,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        clientIds: data.clientIds.split(',').map(s => Number(s.trim())).filter(Boolean),
-        supervisorUserIds: data.supervisorUserIds ? data.supervisorUserIds.split(',').map(s => Number(s.trim())).filter(Boolean) : [],
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setShowForm(false)
-      setForm(emptyForm)
-      setError('')
-    },
-    onError: (err: any) => setError(err.response?.data?.message || 'Failed to create project'),
+    mutationFn: (data: { name: string; startDate: string; endDate: string; clientIds: number[]; supervisorUserIds: number[] }) =>
+      apiClient.post('/projects', data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); resetForm() },
+    onError: (err: any) => setError(err.response?.data?.message || 'Failed to create'),
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: ProjectForm }) =>
-      apiClient.put(`/projects/${id}`, {
-        name: data.name,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        clientIds: data.clientIds.split(',').map(s => Number(s.trim())).filter(Boolean),
-        supervisorUserIds: data.supervisorUserIds ? data.supervisorUserIds.split(',').map(s => Number(s.trim())).filter(Boolean) : [],
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setEditingId(null)
-      setForm(emptyForm)
-      setError('')
-    },
-    onError: (err: any) => setError(err.response?.data?.message || 'Failed to update project'),
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiClient.put(`/projects/${id}`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); resetForm() },
+    onError: (err: any) => setError(err.response?.data?.message || 'Failed to update'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/projects/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setError('')
-    },
-    onError: (err: any) => setError(err.response?.data?.message || 'Failed to delete project'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+    onError: (err: any) => setError(err.response?.data?.message || 'Failed to delete'),
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  function resetForm() {
+    setShowForm(false); setEditId(null); setName(''); setStartDate(''); setEndDate(''); setError('')
+  }
+
+  function handleEdit(p: ProjectResponse) {
+    setEditId(p.id); setName(p.name); setStartDate(p.startDate); setEndDate(p.endDate); setShowForm(true); setError('')
+  }
+
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (editingId !== null) {
-      updateMutation.mutate({ id: editingId, data: form })
+    const payload = { name, startDate, endDate, clientIds: [] as number[], supervisorUserIds: [] as number[] }
+    if (editId) {
+      updateMutation.mutate({ id: editId, data: payload })
     } else {
-      createMutation.mutate(form)
+      createMutation.mutate(payload)
     }
   }
 
-  const startEdit = (p: Project) => {
-    setEditingId(p.id)
-    setForm({
-      name: p.name,
-      startDate: p.startDate,
-      endDate: p.endDate,
-      clientIds: p.clients.map(c => c.id).join(', '),
-      supervisorUserIds: p.supervisors.map(s => s.id).join(', '),
-    })
-    setShowForm(true)
-  }
-
-  const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
-      deleteMutation.mutate(id)
-    }
-  }
-
-  if (isLoading) return <><NavBar /><p style={{ padding: 24 }}>Loading...</p></>
+  if (isLoading) return <p>Loading...</p>
 
   return (
-    <>
-      <NavBar />
-      <div style={{ padding: 24 }}>
-        <h1>Projects</h1>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+      <nav style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Link to="/projects">Projects</Link>
+        <Link to="/clients">Clients</Link>
+        <Link to="/epics">Epics</Link>
+        <Link to="/tasks">Tasks</Link>
+        <Link to="/worklogs">WorkLogs</Link>
+        <span style={{ marginLeft: 'auto' }}>{user?.role}</span>
+        <button onClick={logout}>Logout</button>
+      </nav>
 
-        {isSupervisor && (
-          <button
-            onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyForm); setError('') }}
-            style={{ marginBottom: 16, padding: '8px 16px', cursor: 'pointer' }}
-          >
-            {showForm ? 'Cancel' : 'Add Project'}
+      <h1>Projects</h1>
+
+      {isSupervisor && !showForm && (
+        <button onClick={() => { resetForm(); setShowForm(true) }} style={{ marginBottom: 16 }}>+ New Project</button>
+      )}
+
+      {showForm && (
+        <form onSubmit={handleSubmit} style={{ border: '1px solid #ccc', padding: 16, marginBottom: 24, borderRadius: 8 }}>
+          <h3>{editId ? 'Edit Project' : 'New Project'}</h3>
+          {error && <p style={{ color: 'red' }}>{error}</p>}
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="name">Name</label><br/>
+            <input id="name" value={name} onChange={e => setName(e.target.value)} required style={{ width: '100%' }} />
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="startDate">Start Date</label><br/>
+            <input id="startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required style={{ width: '100%' }} />
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="endDate">End Date</label><br/>
+            <input id="endDate" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} required style={{ width: '100%' }} />
+          </div>
+          <button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+            {editId ? 'Update' : 'Create'}
           </button>
-        )}
+          <button type="button" onClick={resetForm} style={{ marginLeft: 8 }}>Cancel</button>
+        </form>
+      )}
 
-        {showForm && isSupervisor && (
-          <form onSubmit={handleSubmit} style={{ marginBottom: 24, padding: 16, border: '1px solid #ccc', borderRadius: 4 }}>
-            <div style={{ marginBottom: 8 }}>
-              <label>Name: </label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label>Start Date: </label>
-              <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} required />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label>End Date: </label>
-              <input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} required />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label>Client IDs (comma-separated): </label>
-              <input value={form.clientIds} onChange={e => setForm({ ...form, clientIds: e.target.value })} required />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label>Supervisor User IDs (comma-separated): </label>
-              <input value={form.supervisorUserIds} onChange={e => setForm({ ...form, supervisorUserIds: e.target.value })} />
-            </div>
-            <button type="submit" style={{ padding: '8px 16px', cursor: 'pointer' }}>
-              {editingId !== null ? 'Update' : 'Create'}
-            </button>
-          </form>
-        )}
-
+      {projects.length === 0 ? (
+        <p>No projects yet.</p>
+      ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '2px solid #ccc', textAlign: 'left' }}>
-              <th style={{ padding: 8 }}>ID</th>
-              <th style={{ padding: 8 }}>Name</th>
-              <th style={{ padding: 8 }}>Start Date</th>
-              <th style={{ padding: 8 }}>End Date</th>
+            <tr style={{ borderBottom: '2px solid #333' }}>
+              <th style={{ textAlign: 'left', padding: 8 }}>Name</th>
+              <th style={{ textAlign: 'left', padding: 8 }}>Start</th>
+              <th style={{ textAlign: 'left', padding: 8 }}>End</th>
               {isSupervisor && <th style={{ padding: 8 }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {projects?.map(p => (
+            {projects.map(p => (
               <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: 8 }}>{p.id}</td>
                 <td style={{ padding: 8 }}>{p.name}</td>
                 <td style={{ padding: 8 }}>{p.startDate}</td>
                 <td style={{ padding: 8 }}>{p.endDate}</td>
                 {isSupervisor && (
                   <td style={{ padding: 8 }}>
-                    <button onClick={() => startEdit(p)} style={{ marginRight: 8, cursor: 'pointer' }}>Edit</button>
-                    <button onClick={() => handleDelete(p.id)} style={{ cursor: 'pointer', color: 'red' }}>Delete</button>
+                    <button onClick={() => handleEdit(p)}>Edit</button>
+                    <button onClick={() => deleteMutation.mutate(p.id)} style={{ marginLeft: 4, color: 'red' }}>Delete</button>
                   </td>
                 )}
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-    </>
+      )}
+    </div>
   )
 }
